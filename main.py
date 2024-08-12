@@ -1,53 +1,88 @@
-import os
-import openai
-from dotenv import load_dotenv
-import re
+import typer
+from prepare import convert_ebook_to_txt, segment_text_file
+from command_setup import command_setup
+from process import process_json_file, generate_audio_from_json
+from postprocess import stitch_audio_files
+from estimate import estimate_costs
 
-# Load environment variables from .env file
-load_dotenv()
+from enum import Enum
 
-# Set your API key from environment variable
-openai.api_key = os.getenv("OPENAI_API_KEY")
+app = typer.Typer()
 
 
-def sentiment_analysis(text):
-    """Analyze the sentiment of the provided text using OpenAI's chat completions API"""
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a sentiment analysis assistant."},
-            {
-                "role": "user",
-                "content": f"Analyze the sentiment of this text: '{text}'.",
-            },
-        ],
+class ProcessType(str, Enum):
+    text = "text"
+    audio = "audio"
+
+
+@app.command()
+def setup():
+    """Setup the environment and configuration."""
+    command_setup()
+
+
+@app.command()
+def prepare(ebook_path: str):
+    """Prepare the text for processing by converting an ebook and segmenting the text.
+
+    Arguments:
+    ebook_path -- the path to the ebook file
+    """
+    output_txt_file = ".ebookspeech.txt"
+    output_json_file = "ebookspeech.json"
+
+    typer.echo("Starting ebook conversion to text...")
+    convert_ebook_to_txt(ebook_path, output_txt_file)
+
+    typer.echo("Starting text segmentation...")
+    segment_text_file(output_txt_file, output_json_file)
+
+    typer.echo(
+        f"Preparation complete. Text segmented and stored in {output_json_file}."
     )
-    sentiment = response["choices"][0]["message"]["content"].strip().lower()
-    return sentiment
 
 
-def add_expression_marks(text, sentiment):
-    """Add expression marks based on sentiment"""
-    expression_marks = {"positive": "😊", "neutral": "😐", "negative": "😠"}
-    mark = expression_marks.get(sentiment, "")
+@app.command()
+def process(process_type: ProcessType, input_json_file: str, output_json_file: str):
+    """Process the text using sentiment analysis.
 
-    # Append the mark to each sentence.
-    sentences = re.split(r"(\.|!|\?)", text)
-    processed_sentences = [sentence + mark for sentence in sentences if sentence]
+    Arguments:
+    process_type -- the type of processing (e.g., text, audio)
+    input_json_file -- the path to the input JSON file
+    """
+    if process_type == ProcessType.text:
+        output_json_file = "ebookspeech_ok.json"
+        typer.echo(f"Processing text with sentiment analysis and expression marks...")
+        process_json_file(input_json_file, output_json_file)
+        typer.echo(
+            f"Processing complete. Updated JSON file saved as {output_json_file}."
+        )
+    elif process_type == ProcessType.audio:
+        typer.echo(f"Generating audio from JSON file...")
+        generate_audio_from_json(input_json_file)
+        typer.echo(f"Audio generation complete.")
+    else:
+        typer.echo("Unsupported process type.")
 
-    # Reconstruct the text with expression marks.
-    processed_text = "".join(processed_sentences)
-    return processed_text
+
+@app.command()
+def postprocess():
+    """Postprocess the text."""
+    stitch_audio_files()
+    typer.echo("Postprocessing complete. Audiobook generated.")
 
 
-def process_text_with_sentiment_analysis(text):
-    sentiment = sentiment_analysis(text)
-    processed_text = add_expression_marks(text, sentiment)
-    return processed_text
+@app.command()
+def estimate(json_file: str):
+    """Estimate the cost of processing the text.
+
+    Arguments:
+    json_file -- the path to the segmented JSON file
+    """
+    text_cost, tts_cost = estimate_costs(json_file)
+    typer.echo(f"Estimated cost for text processing: ${text_cost:.4f}")
+    typer.echo(f"Estimated cost for TTS: ${tts_cost:.4f}")
 
 
-# Example usage
-text = "This is a fantastic day. I am so happy to be learning new things. However, there is a lot of work to do."
-
-processed_text = process_text_with_sentiment_analysis(text)
-print(processed_text)
+if __name__ == "__main__":
+    app()
