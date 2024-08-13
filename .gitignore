@@ -1,3 +1,7 @@
 .env
 ebookspeech.json
 __pycache__
+.*.env
+.ebookspeech
+final_audiobook.mp3
+ebookspeech_ok.json

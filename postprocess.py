@@ -2,7 +2,7 @@ import os
 from pydub import AudioSegment
 
 
-def stitch_audio_files(directory=".ebookspeech", output_file="final_audiobook.opus"):
+def stitch_audio_files(directory=".ebookspeech", output_file="final_audiobook.mp3"):
     """Load audio files from the .ebookspeech directory and stitch them together to form a finalized audiobook."""
     try:
         # Initialize an empty AudioSegment
@@ -13,7 +13,7 @@ def stitch_audio_files(directory=".ebookspeech", output_file="final_audiobook.op
             [
                 os.path.join(directory, file)
                 for file in os.listdir(directory)
-                if file.endswith(".opus")
+                if file.endswith(".mp3")
             ],
             key=lambda x: int(os.path.splitext(os.path.basename(x))[0]),
         )
@@ -24,7 +24,7 @@ def stitch_audio_files(directory=".ebookspeech", output_file="final_audiobook.op
             final_audio += audio_segment
 
         # Export the final audio file
-        final_audio.export(output_file, format="opus")
+        final_audio.export(output_file, format="mp3")
         print(f"Audiobook generated successfully and saved as {output_file}")
 
     except Exception as e:

@@ -43,7 +43,7 @@ def prepare(ebook_path: str):
 
 
 @app.command()
-def process(process_type: ProcessType, input_json_file: str, output_json_file: str):
+def process(process_type: ProcessType, input_json_file: str):
     """Process the text using sentiment analysis.
 
     Arguments:

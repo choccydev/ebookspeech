@@ -1,5 +1,5 @@
 import os
-import openai
+from openai import OpenAI
 from dotenv import load_dotenv
 import re
 import json
@@ -9,46 +9,28 @@ from pathlib import Path
 load_dotenv(dotenv_path=".ebookspeech.env")
 
 # Set your API key from environment variable
-openai.api_key = os.getenv("OPENAI_API_KEY")
+CLIENT = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
 def sentiment_analysis(text):
     """Analyze the sentiment of the provided text using OpenAI's chat completions API."""
     prompt = (
         "Analyze the sentiment of this text and add expression marks based on sentiment. "
-        "Ignore TOCs, lists, page numbers, and any other elements that might disturb the reading experience: "
+        "Ignore TOCs, lists, page numbers, and any other elements that might disturb the reading experience. Replace any redaction marks (like \u2588) with the literal string `[REDACTED]` and vased on the sentiment analysis, add expression marks suitable for TTS software like OpenAI's STT service: "
         f"'{text}'."
+        "Respond ONLY AND ONLY WITH THE PROCESSED TEXT. IF THE TEXT IS MISSING RETURN JUST A DOT AND NOTHING ELSE THAN A DOT. REPEAT IF TEXT IS MISSING ONLY RETURN A DOT."
     )
 
-    response = openai.ChatCompletion.create(
+    response = CLIENT.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a sentiment analysis assistant."},
             {"role": "user", "content": prompt},
         ],
     )
-    sentiment = response["choices"][0]["message"]["content"].strip().lower()
+    sentiment = response.choices[0].message.content.strip().lower()
+    # print(sentiment)
     return sentiment
-
-
-def add_expression_marks(text, sentiment):
-    """Add expression marks based on sentiment."""
-    expression_marks = {"positive": "😊", "neutral": "😐", "negative": "😠"}
-    mark = expression_marks.get(sentiment, "")
-
-    # Append the mark to each sentence
-    sentences = re.split(r"(\.|!|\?)", text)
-    processed_sentences = [sentence + mark for sentence in sentences if sentence]
-
-    # Reconstruct the text with expression marks
-    processed_text = "".join(processed_sentences)
-    return processed_text
-
-
-def process_text_with_sentiment_analysis(text):
-    sentiment = sentiment_analysis(text)
-    processed_text = add_expression_marks(text, sentiment)
-    return processed_text
 
 
 def process_json_file(input_json_file, output_json_file):
@@ -57,9 +39,7 @@ def process_json_file(input_json_file, output_json_file):
         with open(input_json_file, "r") as file:
             data = json.load(file)
 
-        processed_data = [
-            process_text_with_sentiment_analysis(segment) for segment in data
-        ]
+        processed_data = [sentiment_analysis(segment) for segment in data]
 
         with open(output_json_file, "w") as file:
             json.dump(processed_data, file)
@@ -81,10 +61,12 @@ def generate_audio_from_json(json_file):
             data = json.load(file)
 
         for index, text in enumerate(data):
-            response = openai.Audio.create(model="tts-1", voice="alloy", input=text)
+            response = CLIENT.audio.speech.create(
+                model="tts-1", voice="alloy", input=text
+            )
 
-            audio_file_path = Path(output_directory) / f"{index}.opus"
-            response.stream_to_file(audio_file_path)
+            audio_file_path = Path(output_directory) / f"{index}.mp3"
+            response.write_to_file(audio_file_path)
 
         print(f"Audio generation complete. Files saved in {output_directory}.")
     except Exception as e:
